@@ -70,7 +70,6 @@ summary{cursor:pointer;font-weight:600}
 <div id="page" hidden>
   <div class="tabs" role="tablist">
     <button class="tab on" type="button" role="tab" aria-selected="true" data-tab="sleeper">Sleeper</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab="espn">ESPN</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab="dk">DraftKings Best Ball</button>
   </div>
   <p id="note" role="status" hidden></p>
@@ -88,24 +87,6 @@ summary{cursor:pointer;font-weight:600}
       <input id="lid" type="text" inputmode="numeric" value="1313951840064278528">
       <button id="loadBtn" type="button">Import league</button>
     </div>
-  </section>
-
-  <section class="panel" id="t-espn" hidden>
-    <form id="espnForm" autocomplete="off">
-      <label for="eid">ESPN league ID</label>
-      <input id="eid" type="text" inputmode="numeric" placeholder="the number in your league’s web address">
-      <label for="eseason">Season</label>
-      <input id="eseason" type="text" inputmode="numeric" style="max-width:120px">
-      <details>
-        <summary>My league is private</summary>
-        <p class="meta">ESPN only shares private leagues with your login cookies. Copy <b>espn_s2</b> and <b>SWID</b> from your browser’s cookies for espn.com on a computer (developer tools, then Application or Storage, then Cookies). They’re sent over HTTPS only to import this league, never saved, and the boxes clear afterward.</p>
-        <label for="es2">espn_s2</label>
-        <input id="es2" type="password" autocomplete="off" autocapitalize="none" spellcheck="false">
-        <label for="eswid">SWID</label>
-        <input id="eswid" type="password" autocomplete="off" autocapitalize="none" spellcheck="false">
-      </details>
-      <div class="row"><button id="ebtn" type="submit">Import from ESPN</button></div>
-    </form>
   </section>
 
   <section class="panel" id="t-dk" hidden>
@@ -155,7 +136,7 @@ const note = (t, bad) => { const n = $("note"); n.textContent = t || ""; n.class
 const sget = async p => { const r = await fetch(SL + p); if (!r.ok) throw new Error("Sleeper returned " + r.status); return r.json(); };
 const head = a => "<tr>" + a.map(x => `<th tabindex="0" title="Click to sort">${esc(x)}</th>`).join("") + "</tr>";
 const now = new Date(), yr = now.getMonth() < 2 ? now.getFullYear() - 1 : now.getFullYear();
-$("season").value = yr; $("eseason").value = yr;
+$("season").value = yr;
 
 // ---------- sign-in gate ----------
 async function boot() {
@@ -174,7 +155,7 @@ $("signout").onclick = async () => { if (sb) await sb.auth.signOut(); location.r
 // ---------- tabs ----------
 document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-selected", x === b); });
-  ["sleeper", "espn", "dk"].forEach(k => $("t-" + k).hidden = k !== b.dataset.tab);
+  ["sleeper", "dk"].forEach(k => $("t-" + k).hidden = k !== b.dataset.tab);
   note("");
 });
 function openTab(k) { document.querySelector(`.tab[data-tab="${k}"]`).click(); }
@@ -219,27 +200,6 @@ $("loadBtn").onclick = () => importSleeper($("lid").value.trim());
 $("user").onkeydown = e => e.key === "Enter" && findLeagues();
 $("lid").onkeydown = e => e.key === "Enter" && importSleeper($("lid").value.trim());
 $("leagues").onclick = e => { const b = e.target.closest("button"); if (b) importSleeper(b.dataset.id); };
-
-// ---------- ESPN ----------
-$("espnForm").onsubmit = async e => {
-  e.preventDefault(); note("");
-  const id = $("eid").value.trim(), season = $("eseason").value.trim();
-  if (!/^\d{3,12}$/.test(id)) return note("Enter the numeric ESPN league ID.", true);
-  if (!/^20\d\d$/.test(season)) return note("Enter a four-digit season.", true);
-  $("ebtn").disabled = true; note("Importing from ESPN…");
-  try {
-    const r = await fetch(cfg.SUPABASE_URL + "/functions/v1/espn", { method: "POST",
-      headers: { "Content-Type": "application/json", apikey: cfg.SUPABASE_ANON_KEY, Authorization: "Bearer " + session.access_token },
-      body: JSON.stringify({ leagueId: id, season, s2: $("es2").value.trim(), swid: $("eswid").value.trim() }) });
-    let d = {}; try { d = await r.json(); } catch {}
-    if (!r.ok) throw new Error(d.error || "ESPN import failed (" + r.status + ").");
-    $("es2").value = ""; $("eswid").value = "";
-    show({ platform: "espn", id, season, name: d.name || "ESPN league " + id, meta: `${season} · ${d.teams.length} teams · ESPN`, teams: d.teams });
-    note("");
-  } catch (err) {
-    note(err.message === "Failed to fetch" ? "Couldn’t reach the ESPN import function. Make sure the function named espn is deployed in Supabase, then try again." : err.message, true);
-  } finally { $("ebtn").disabled = false; }
-};
 
 // ---------- DraftKings best ball (CSV) ----------
 function parseCSV(t) {
@@ -346,7 +306,7 @@ $("savedList").onclick = async e => {
   if (b.dataset.del) { await sb.from("saved_leagues").delete().eq("id", b.dataset.del); return loadSaved(); }
   const x = saved.find(s => s.id === b.dataset.open); if (!x) return;
   if (x.platform === "sleeper") importSleeper(x.league_id);
-  else { openTab("espn"); $("eid").value = x.league_id; $("eseason").value = x.season || yr; note("Tap Import from ESPN. If this league is private, enter your cookies again first."); }
+  else note("That saved league came from a source this site no longer imports. You can remove it from the list.", true);
 };
 $("save").onclick = async () => {
   if (!cur) return;
