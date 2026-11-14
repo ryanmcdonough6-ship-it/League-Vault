@@ -228,8 +228,8 @@ $("espnForm").onsubmit = async e => {
   if (!/^20\d\d$/.test(season)) return note("Enter a four-digit season.", true);
   $("ebtn").disabled = true; note("Importing from ESPN…");
   try {
-    const r = await fetch("/.netlify/functions/espn", { method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+    const r = await fetch(cfg.SUPABASE_URL + "/functions/v1/espn", { method: "POST",
+      headers: { "Content-Type": "application/json", apikey: cfg.SUPABASE_ANON_KEY, Authorization: "Bearer " + session.access_token },
       body: JSON.stringify({ leagueId: id, season, s2: $("es2").value.trim(), swid: $("eswid").value.trim() }) });
     let d = {}; try { d = await r.json(); } catch {}
     if (!r.ok) throw new Error(d.error || "ESPN import failed (" + r.status + ").");
@@ -237,7 +237,7 @@ $("espnForm").onsubmit = async e => {
     show({ platform: "espn", id, season, name: d.name || "ESPN league " + id, meta: `${season} · ${d.teams.length} teams · ESPN`, teams: d.teams });
     note("");
   } catch (err) {
-    note(err.message === "Failed to fetch" ? "Couldn’t reach the ESPN import function. It only works on your live Netlify site, not in a preview or a local file." : err.message, true);
+    note(err.message === "Failed to fetch" ? "Couldn’t reach the ESPN import function. Make sure the function named espn is deployed in Supabase, then try again." : err.message, true);
   } finally { $("ebtn").disabled = false; }
 };
 
