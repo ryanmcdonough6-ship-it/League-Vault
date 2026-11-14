@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>In Season Tournament</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5a6b7a;--a:#1f6b4a;--b:#b5471f;--flag:#e8b923;--line:#c9d2da;--err:#b3261e}
+@media (prefers-color-scheme:dark){:root{--paper:#0f1a22;--card:#16252f;--ink:#e8eef3;--mute:#93a4b2;--a:#4cc08a;--b:#ff9566;--line:#2a3d4a;--err:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Source Sans 3",system-ui,sans-serif}
+main{max-width:760px;margin:0 auto;padding:28px 16px 64px}
+h1,h2,h3{font-family:"Barlow Condensed",Impact,sans-serif;margin:0}
+h1{font-size:44px;line-height:1;border-left:8px solid var(--flag);padding-left:12px}
+h2{font-size:28px;margin:28px 0 4px}
+.sub,.meta{color:var(--mute)}
+.sub{margin:10px 0 20px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:16px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+input{flex:1 1 200px;min-width:0;padding:11px 12px;font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:4px}
+button{font:inherit;font-weight:600;padding:11px 16px;border:0;border-radius:4px;background:var(--a);color:#fff;cursor:pointer}
+@media (prefers-color-scheme:dark){button{color:#08130e}}
+input:focus-visible,button:focus-visible{outline:3px solid var(--flag);outline-offset:1px}
+.err{color:var(--err);margin:10px 0 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:10px}
+.div{background:var(--card);border:1px solid var(--line);border-top-width:6px;border-radius:6px;padding:12px 16px}
+.div.a{border-top-color:var(--a)}.div.b{border-top-color:var(--b)}
+.div h3{font-size:24px}
+.div.a h3{color:var(--a)}.div.b h3{color:var(--b)}
+ol{list-style:none;margin:8px 0 0;padding:0}
+li{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)}
+li:last-child{border:0}
+li span:last-child{color:var(--mute);white-space:nowrap;font-variant-numeric:tabular-nums}
+[hidden]{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>In Season Tournament</h1>
+<p class="sub">Two divisions, rebuilt from the league’s history. <a href="index.html" style="color:var(--a)">Dashboard</a> · <a href="history.html" style="color:var(--a)">League History</a> · <a href="import.html" style="color:var(--a)">League import</a></p>
+
+<section class="panel">
+  <label for="lid" style="font-weight:600;display:block;margin-bottom:6px">League ID</label>
+  <div class="row">
+    <input id="lid" inputmode="numeric" placeholder="Sleeper league ID">
+    <button id="go">Build divisions</button>
+  </div>
+  <p class="err" id="err" role="alert" hidden></p>
+</section>
+
+<section id="out" hidden>
+  <h2>Original divisions</h2>
+  <p class="meta" id="origNote"></p>
+  <div class="grid" id="orig"></div>
+  <h2>Next divisions</h2>
+  <p class="meta" id="nextNote"></p>
+  <div class="grid" id="next"></div>
+</section>
+</main>
+
+<script>
+const API = "https://api.sleeper.app/v1";
+const DIV_A = "Hail Marys";   // odd draft slots / ranks 1, 4, 5, 8, 9...
+const DIV_B = "Pick Sixes";   // even draft slots / ranks 2, 3, 6, 7...
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const get = async p => { const r = await fetch(API + p); if (!r.ok) throw new Error("Sleeper returned " + r.status); return r.json(); };
+const fail = m => { $("err").textContent = m; $("err").hidden = !m; };
+
+$("lid").value = "1313951840064278528";
+
+async function build() {
+  fail("");
+  const id = $("lid").value.trim();
+  if (!/^\d+$/.test(id)) return fail("Enter your league ID (numbers only).");
+  try {
+    // Walk back through every past season of this league.
+    const chain = [];
+    let cur = id;
+    while (cur && cur !== "0" && chain.length < 25) {
+      const l = await get("/league/" + cur);
+      if (!l || !l.league_id) break;
+      chain.push(l); cur = l.previous_league_id;
+    }
+    if (!chain.length) return fail("League not found. Double-check the ID.");
+    const [users, ...rosterSets] = await Promise.all([get(`/league/${chain[0].league_id}/users`), ...chain.map(l => get(`/league/${l.league_id}/rosters`))]);
+    try { localStorage.setItem("lid", id); } catch {}
+
+    // Team names come from the current season.
+    const uById = Object.fromEntries(users.map(u => [u.user_id, u]));
+    const name = {};
+    rosterSets[0].forEach(r => { const u = uById[r.owner_id] || {}; name[r.roster_id] = (u.metadata && u.metadata.team_name) || u.display_name || "Team " + r.roster_id; });
+
+    // Original divisions: parity of startup-draft slot.
+    const first = chain[chain.length - 1];
+    const drafts = await get(`/league/${first.league_id}/drafts`);
+    const d = drafts && drafts[0];
+    const slot = {};
+    if (d && d.slot_to_roster_id) Object.entries(d.slot_to_roster_id).forEach(([s, rid]) => slot[rid] = +s);
+    else if (d && d.draft_order) rosterSets[rosterSets.length - 1].forEach(r => { if (d.draft_order[r.owner_id]) slot[r.roster_id] = d.draft_order[r.owner_id]; });
+    const usedDraft = Object.keys(slot).length > 0;
+    const ids = Object.keys(name).map(Number);
+    if (!usedDraft) ids.forEach(rid => slot[rid] = rid);
+    const orig = ids.sort((x, y) => slot[x] - slot[y]).map(rid => ({rid, d: slot[rid] % 2 ? "a" : "b", right: "Slot " + slot[rid]}));
+    $("origNote").textContent = usedDraft
+      ? `Based on the ${first.season} startup draft: odd slots in ${DIV_A}, even slots in ${DIV_B}.`
+      : `No startup draft found, so roster numbers stand in for draft slots.`;
+
+    // Next divisions: all-time record, snaked 1-A, 2-B, 3-B, 4-A, 5-A...
+    const st = {};
+    rosterSets.flat().forEach(r => {
+      const s = r.settings || {}, t = st[r.roster_id] ||= {w: 0, l: 0, t: 0, pf: 0};
+      t.w += s.wins || 0; t.l += s.losses || 0; t.t += s.ties || 0; t.pf += (s.fpts || 0) + (s.fpts_decimal || 0) / 100;
+    });
+    const pct = t => (t.w + t.t / 2) / ((t.w + t.l + t.t) || 1);
+    const ranked = ids.slice().sort((x, y) => pct(st[y]) - pct(st[x]) || st[y].pf - st[x].pf);
+    const next = ranked.map((rid, i) => {
+      const t = st[rid], n = i + 1;
+      return {rid, d: (n % 4 === 1 || n % 4 === 0) ? "a" : "b", right: `${t.w}-${t.l}${t.t ? "-" + t.t : ""} · ${(pct(t) * 100).toFixed(1)}%`, n};
+    });
+    $("nextNote").textContent = `All-time records across ${chain.length} season${chain.length > 1 ? "s" : ""}, snaked through the standings. Ties in win percentage go to total points scored.`;
+
+    const card = (rows, k) => {
+      const nm = k === "a" ? DIV_A : DIV_B;
+      return `<div class="div ${k}"><h3>${esc(nm)}</h3><ol>` + rows.filter(r => r.d === k).map(r => `<li><span>${r.n ? r.n + ". " : ""}${esc(name[r.rid])}</span><span>${esc(r.right)}</span></li>`).join("") + "</ol></div>";
+    };
+    $("orig").innerHTML = card(orig, "a") + card(orig, "b");
+    $("next").innerHTML = card(next, "a") + card(next, "b");
+    $("out").hidden = false;
+  } catch (e) { fail("Couldn’t build the divisions: " + e.message); }
+}
+$("go").onclick = build;
+$("lid").onkeydown = e => e.key === "Enter" && build();
+build();
+</script>
+</body>
+</html>

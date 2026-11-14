@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>League Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5a6b7a;--a:#1f6b4a;--b:#b5471f;--flag:#e8b923;--line:#c9d2da;--err:#b3261e;--win:#1f6b4a;--loss:#b3261e}
+@media (prefers-color-scheme:dark){:root{--paper:#0f1a22;--card:#16252f;--ink:#e8eef3;--mute:#93a4b2;--a:#4cc08a;--b:#ff9566;--line:#2a3d4a;--err:#ff8a80;--win:#4cc08a;--loss:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Source Sans 3",system-ui,sans-serif}
+main{max-width:800px;margin:0 auto;padding:24px 16px 64px}
+h1,h2,h3{font-family:"Barlow Condensed",Impact,sans-serif;margin:0}
+h1{font-size:48px;line-height:1;border-left:8px solid var(--flag);padding-left:12px}
+h2{font-size:26px;margin-bottom:6px}
+a{color:var(--a)}
+.meta{color:var(--mute)}
+.top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.links{display:flex;gap:14px;flex-wrap:wrap}
+select{font:inherit;padding:9px 10px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:4px;max-width:100%}
+select:focus-visible{outline:3px solid var(--flag);outline-offset:1px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px;margin-top:12px}
+.hero{border-top:6px solid var(--a)}
+.hero.b{border-top-color:var(--b)}
+.hero .sub{margin:6px 0 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:12px}
+.stat{border:1px solid var(--line);border-radius:6px;padding:8px 12px}
+.stat b{display:block;font:700 28px/1.1 "Barlow Condensed",Impact,sans-serif;font-variant-numeric:tabular-nums}
+.stat span{color:var(--mute);font-size:14px}
+.vs{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.vs div{flex:1 1 180px}
+.vs .score{font:700 34px/1 "Barlow Condensed",Impact,sans-serif;font-variant-numeric:tabular-nums}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.chip{border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-variant-numeric:tabular-nums}
+.chip b{margin-right:6px}.chip.w b{color:var(--win)}.chip.l b{color:var(--loss)}
+ul{list-style:none;margin:6px 0 0;padding:0}
+li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+li:last-child{border:0}
+li span:last-child{color:var(--mute);white-space:nowrap;font-variant-numeric:tabular-nums}
+.pos{display:inline-block;min-width:34px;font-weight:700;color:var(--a)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+h3{font-size:19px;color:var(--mute);margin-top:10px}
+.err{color:var(--err)}
+p{margin:6px 0}
+</style>
+</head>
+<body>
+<main>
+<div class="top">
+  <h1>League Dashboard</h1>
+</div>
+<div class="top">
+  <div class="links"><a href="history.html">League History</a><a href="tournament.html">Divisions</a><a href="import.html">League import</a></div>
+  <label class="meta">My team <select id="team" aria-label="My team"></select></label>
+</div>
+<div id="app"><div class="panel">Loading your league…</div></div>
+</main>
+<script>
+const API="https://api.sleeper.app/v1",LEAGUE="1313951840064278528",DIV={a:"Hail Marys",b:"Pick Sixes"};
+const $=i=>document.getElementById(i),
+esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),
+get=async p=>{const r=await fetch(API+p);if(!r.ok)throw new Error("Sleeper "+r.status);return r.json()},
+cap=p=>get(p).catch(()=>null),f=n=>(+n||0).toFixed(1),
+S=r=>r.settings||{},pf=r=>(S(r).fpts||0)+(S(r).fpts_decimal||0)/100,pa=r=>(S(r).fpts_against||0)+(S(r).fpts_against_decimal||0)/100,
+wins=r=>S(r).wins||0,loss=r=>S(r).losses||0,ties=r=>S(r).ties||0,
+pct=c=>(c.w+c.t/2)/((c.w+c.t+c.l)||1),
+ord=n=>{const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0])};
+let ch=[],L,name={},ids=[],players={},W=[],TX=[],divMap={},titles={},cw=0,lastScored=0,DATA={};
+const nm=r=>esc(name[r]||"Team "+r);
+const pn=id=>{const p=players[id];return p?esc(p.full_name||id):esc(id)};
+const pp=id=>{const p=players[id];return p&&p.position?esc(p.position):""};
+
+async function init(){
+  try{
+    const [state,pl]=await Promise.all([cap("/state/nfl"),cap("/players/nfl")]);
+    players=pl||{};
+    let cur=LEAGUE;
+    while(cur&&cur!=="0"&&ch.length<25){const l=await get("/league/"+cur);if(!l||!l.league_id)break;ch.push(l);cur=l.previous_league_id}
+    if(!ch.length)throw new Error("League not found");
+    L=ch[0];
+    const [users,...rs]=await Promise.all([get(`/league/${L.league_id}/users`),...ch.map(l=>get(`/league/${l.league_id}/rosters`))]);
+    ch.forEach((l,i)=>l.rosters=rs[i]);
+    const u=Object.fromEntries(users.map(x=>[x.user_id,x]));
+    rs[0].forEach(r=>{const x=u[r.owner_id]||{};name[r.roster_id]=(x.metadata&&x.metadata.team_name)||x.display_name||"Team "+r.roster_id});
+    ids=Object.keys(name).map(Number);
+
+    lastScored=S(L).last_scored_leg||0;
+    const live=state&&state.season==L.season&&state.season_type=="regular";
+    cw=Math.min(18,live?state.week:lastScored);
+    const wk=Array.from({length:Math.max(cw,lastScored)},(_,i)=>i+1);
+    const [mw,tx,brs,ds]=await Promise.all([
+      Promise.all(wk.map(w=>cap(`/league/${L.league_id}/matchups/${w}`))),
+      Promise.all(wk.map(w=>cap(`/league/${L.league_id}/transactions/${w}`))),
+      Promise.all(ch.map(l=>cap(`/league/${l.league_id}/winners_bracket`))),
+      cap(`/league/${ch[ch.length-1].league_id}/drafts`)]);
+    W=mw.map(a=>(a||[]));
+    TX=tx.map(a=>a||[]);
+    brs.forEach(b=>{const fin=(b||[]).find(m=>m.p===1);if(fin&&fin.w)titles[fin.w]=(titles[fin.w]||0)+1});
+
+    // Division for the current season, using the same rules as the divisions page.
+    const d=ds&&ds[0],slot={};
+    if(d&&d.slot_to_roster_id)Object.entries(d.slot_to_roster_id).forEach(([s,r])=>slot[r]=+s);
+    else if(d&&d.draft_order)rs[rs.length-1].forEach(r=>{if(d.draft_order[r.owner_id])slot[r.roster_id]=d.draft_order[r.owner_id]});
+    ids.forEach(r=>{if(!slot[r])slot[r]=r});
+    if(ch.length==1)ids.forEach(r=>divMap[r]=slot[r]%2?"a":"b");
+    else{
+      const cum={};ids.forEach(r=>cum[r]={w:0,l:0,t:0,pf:0});
+      ch.slice(1).forEach(l=>l.rosters.forEach(r=>{const c=cum[r.roster_id];if(!c)return;c.w+=wins(r);c.l+=loss(r);c.t+=ties(r);c.pf+=pf(r)}));
+      ids.slice().sort((x,y)=>pct(cum[y])-pct(cum[x])||cum[y].pf-cum[x].pf).forEach((r,k)=>divMap[r]=(k%4==0||k%4==3)?"a":"b");
+    }
+
+    let saved=null;try{saved=+localStorage.getItem("myTeam")}catch{}
+    $("team").innerHTML=ids.map(r=>`<option value="${r}">${nm(r)}</option>`).join("");
+    $("team").value=ids.includes(saved)?saved:ids[0];
+    $("team").onchange=()=>{try{localStorage.setItem("myTeam",$("team").value)}catch{}render()};
+    render();
+  }catch(e){$("app").innerHTML=`<div class="panel err">Couldn’t load the league: ${esc(e.message)}</div>`}
+}
+
+function entry(w,rid){return(W[w-1]||[]).find(m=>m.roster_id==rid)}
+function opp(w,rid){const m=entry(w,rid);return m&&m.matchup_id!=null?(W[w-1]||[]).find(x=>x.roster_id!=rid&&x.matchup_id==m.matchup_id):null}
+
+function render(){
+  const rid=+$("team").value,mine=L.rosters.find(r=>r.roster_id==rid);
+  if(!mine){$("app").innerHTML='<div class="panel err">That team isn’t in the current season.</div>';return}
+  const order=L.rosters.slice().sort((x,y)=>wins(y)-wins(x)||pf(y)-pf(x)),rank=order.findIndex(r=>r.roster_id==rid)+1;
+  const d=divMap[rid]||"a";
+  const all={w:0,l:0,t:0};ch.forEach(l=>{const r=l.rosters.find(x=>x.roster_id==rid);if(r){all.w+=wins(r);all.l+=loss(r);all.t+=ties(r)}});
+  const tt=titles[rid]||0;
+
+  // this week
+  let week="";
+  if(cw>0){
+    const m=entry(cw,rid),o=opp(cw,rid);
+    week=`<div class="panel"><h2>Week ${cw} matchup</h2>`+(m&&o?
+      `<div class="vs"><div><b>${nm(rid)}</b><div class="score">${f(m.points)}</div></div><div><b>${nm(o.roster_id)}</b><div class="score">${f(o.points)}</div></div></div>`:
+      `<p class="meta">No matchup this week.</p>`)+`</div>`;
+  }
+
+  // recent results
+  const res=[];
+  for(let w=1;w<=W.length;w++){const m=entry(w,rid),o=opp(w,rid);if(m&&o&&(m.points||o.points))res.push({w,m:m.points,o:o.points})}
+  const recent=res.slice(-6).reverse();
+  const recentHtml=recent.length?`<div class="panel"><h2>Recent results</h2><div class="chips">${recent.map(x=>`<div class="chip ${x.m>=x.o?"w":"l"}"><b>${x.m>=x.o?"W":"L"}</b>Wk ${x.w} · ${f(x.m)}–${f(x.o)}</div>`).join("")}</div></div>`:"";
+
+  // roster, with points from the latest week played
+  const lw=res.length?res[res.length-1].w:0,pts=(entry(lw,rid)||{}).players_points||{};
+  const st=mine.starters||[],res2=mine.reserve||[],bench=(mine.players||[]).filter(p=>!st.includes(p)&&!res2.includes(p));
+  const rows=(a,showPts)=>a.length?"<ul>"+a.map(p=>`<li><span><span class="pos">${pp(p)}</span>${pn(p)}</span><span>${showPts&&lw&&pts[p]!=null?f(pts[p]):""}</span></li>`).join("")+"</ul>":"";
+  const roster=`<div class="panel"><h2>My roster</h2>${lw?`<p class="meta">Points shown are from week ${lw}.</p>`:""}<div class="cols"><div><h3>Starters</h3>${rows(st,true)}</div><div><h3>Bench</h3>${rows(bench,true)}${res2.length?"<h3>Injured reserve</h3>"+rows(res2,false):""}</div></div></div>`;
+
+  // trades involving my team
+  const trades=[];
+  TX.forEach((a,i)=>a.filter(t=>t.type=="trade"&&t.status=="complete"&&(t.roster_ids||[]).includes(rid)).forEach(t=>trades.push({w:i+1,t})));
+  const tr=trades.slice(-4).reverse().map(({w,t})=>{
+    const got=Object.keys(t.adds||{}).filter(p=>t.adds[p]==rid),gave=Object.keys(t.adds||{}).filter(p=>t.adds[p]!=rid),
+      gp=(t.draft_picks||[]).filter(k=>k.owner_id==rid).map(k=>`${esc(k.season)} round ${esc(k.round)} pick`),
+      lp=(t.draft_picks||[]).filter(k=>k.previous_owner_id==rid).map(k=>`${esc(k.season)} round ${esc(k.round)} pick`);
+    return`<li><span>Week ${w}: got ${got.map(pn).concat(gp).join(", ")||"nothing"}; gave ${gave.map(pn).concat(lp).join(", ")||"nothing"}</span></li>`}).join("");
+  const tradeHtml=`<div class="panel"><h2>My trades</h2>${tr?`<ul>${tr}</ul>`:`<p class="meta">No trades yet this season.</p>`}</div>`;
+
+  // standings snapshot
+  const near=order.map((r,i)=>({r,i})).filter(x=>Math.abs(x.i+1-rank)<=2);
+  const stand=`<div class="panel"><h2>Standings</h2><ul>${near.map(x=>`<li><span>${x.r.roster_id==rid?"<b>":""}${x.i+1}. ${nm(x.r.roster_id)}${x.r.roster_id==rid?"</b>":""}</span><span>${wins(x.r)}-${loss(x.r)}${ties(x.r)?"-"+ties(x.r):""} · ${f(pf(x.r))}</span></li>`).join("")}</ul></div>`;
+
+  $("app").innerHTML=
+    `<div class="panel hero ${d}"><h2 style="font-size:36px">${nm(rid)}</h2><p class="sub meta">${esc(L.season)} · ${esc(DIV[d])}</p>
+     <div class="stats">
+       <div class="stat"><b>${wins(mine)}-${loss(mine)}${ties(mine)?"-"+ties(mine):""}</b><span>${ord(rank)} of ${L.rosters.length}</span></div>
+       <div class="stat"><b>${f(pf(mine))}</b><span>Points for</span></div>
+       <div class="stat"><b>${f(pa(mine))}</b><span>Points against</span></div>
+       <div class="stat"><b>${all.w}-${all.l}${all.t?"-"+all.t:""}</b><span>All-time record</span></div>
+       <div class="stat"><b>${tt}</b><span>${tt==1?"Title":"Titles"}</span></div>
+     </div></div>`+week+recentHtml+stand+roster+tradeHtml;
+}
+init();
+</script>
+</body>
+</html>

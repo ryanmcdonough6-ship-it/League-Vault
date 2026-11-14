@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Import a league</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5a6b7a;--turf:#1f6b4a;--flag:#e8b923;--line:#c9d2da;--err:#b3261e;--on:#fff}
+@media (prefers-color-scheme:dark){:root{--paper:#0f1a22;--card:#16252f;--ink:#e8eef3;--mute:#93a4b2;--turf:#4cc08a;--line:#2a3d4a;--err:#ff8a80;--on:#08130e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Source Sans 3",system-ui,sans-serif}
+main{max-width:760px;margin:0 auto;padding:24px 16px 64px}
+h1,h2,h3{font-family:"Barlow Condensed",Impact,sans-serif;margin:0}
+h1{font-size:44px;line-height:1;border-left:8px solid var(--flag);padding-left:12px}
+h2{font-size:26px;margin-bottom:6px}
+h3{font-size:18px;color:var(--mute);margin:10px 0 2px}
+a{color:var(--turf)}
+.meta{color:var(--mute)}
+.top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.links{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px;margin-top:12px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{font:inherit;font-weight:600;padding:9px 14px;border-radius:4px;background:var(--card);color:var(--ink);border:1px solid var(--line);cursor:pointer}
+.tab.on{background:var(--turf);color:var(--on);border-color:var(--turf)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+label{display:block;font-weight:600;margin:12px 0 0}
+input[type=text],input[type=password],input[type=file]{flex:1 1 160px;min-width:0;width:100%;padding:11px 12px;font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:4px}
+.row input{width:auto}
+input:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--flag);outline-offset:1px}
+button{font:inherit;font-weight:600;padding:11px 16px;border:0;border-radius:4px;background:var(--turf);color:var(--on);cursor:pointer}
+button:disabled{opacity:.6;cursor:default}
+button.ghost{background:none;color:var(--turf);border:1px solid var(--turf);padding:8px 12px}
+.tab{padding:9px 14px}
+.pick{display:block;width:100%;text-align:left;margin-top:8px;background:var(--paper);color:var(--ink);border:1px solid var(--line)}
+.err{color:var(--err)}
+#note{margin:12px 0 0}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:9px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th[tabindex]{cursor:pointer;user-select:none}
+th[tabindex]:focus-visible{outline:3px solid var(--flag);outline-offset:-3px}
+th[aria-sort=ascending]::after{content:" \25B2"}
+th[aria-sort=descending]::after{content:" \25BC"}
+tr.team{cursor:pointer}
+tr.team:hover td{background:var(--paper)}
+.roster td{text-align:left;white-space:normal;background:var(--paper)}
+.roster ul{columns:2 200px}
+ul{list-style:none;margin:4px 0 8px;padding:0}
+li{padding:3px 0}
+#savedList li{display:flex;justify-content:space-between;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:8px 0}
+#savedList li:last-child{border:0}
+.pos{display:inline-block;min-width:36px;margin-right:8px;font-weight:700;color:var(--turf)}
+details{margin-top:12px}
+summary{cursor:pointer;font-weight:600}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<div class="top">
+  <h1>Import a league</h1>
+  <div class="meta"><span id="who"></span> <button class="ghost" id="signout" type="button">Sign out</button></div>
+</div>
+<div class="links"><a href="index.html">Dashboard</a><a href="history.html">League History</a><a href="tournament.html">Divisions</a></div>
+
+<div class="panel" id="gate">Checking your sign-in…</div>
+
+<div id="page" hidden>
+  <div class="tabs" role="tablist">
+    <button class="tab on" type="button" role="tab" aria-selected="true" data-tab="sleeper">Sleeper</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-tab="espn">ESPN</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-tab="dk">DraftKings Best Ball</button>
+  </div>
+  <p id="note" role="status" hidden></p>
+
+  <section class="panel" id="t-sleeper">
+    <label for="user">Sleeper username</label>
+    <div class="row">
+      <input id="user" type="text" autocomplete="off" autocapitalize="none" placeholder="username">
+      <input id="season" type="text" inputmode="numeric" style="flex:0 1 90px" aria-label="Season">
+      <button id="findBtn" type="button">Find leagues</button>
+    </div>
+    <div id="leagues"></div>
+    <label for="lid">Or a league ID</label>
+    <div class="row">
+      <input id="lid" type="text" inputmode="numeric" value="1313951840064278528">
+      <button id="loadBtn" type="button">Import league</button>
+    </div>
+  </section>
+
+  <section class="panel" id="t-espn" hidden>
+    <form id="espnForm" autocomplete="off">
+      <label for="eid">ESPN league ID</label>
+      <input id="eid" type="text" inputmode="numeric" placeholder="the number in your league’s web address">
+      <label for="eseason">Season</label>
+      <input id="eseason" type="text" inputmode="numeric" style="max-width:120px">
+      <details>
+        <summary>My league is private</summary>
+        <p class="meta">ESPN only shares private leagues with your login cookies. Copy <b>espn_s2</b> and <b>SWID</b> from your browser’s cookies for espn.com on a computer (developer tools, then Application or Storage, then Cookies). They’re sent over HTTPS only to import this league, never saved, and the boxes clear afterward.</p>
+        <label for="es2">espn_s2</label>
+        <input id="es2" type="password" autocomplete="off" autocapitalize="none" spellcheck="false">
+        <label for="eswid">SWID</label>
+        <input id="eswid" type="password" autocomplete="off" autocapitalize="none" spellcheck="false">
+      </details>
+      <div class="row"><button id="ebtn" type="submit">Import from ESPN</button></div>
+    </form>
+  </section>
+
+  <section class="panel" id="t-dk" hidden>
+    <label for="dkfile">DraftKings best ball CSV</label>
+    <input id="dkfile" type="file" accept=".csv,text/csv">
+    <p class="meta">The file is read in your browser and isn’t uploaded anywhere. I couldn’t confirm DraftKings’ exact export layout, so this reads any CSV: it shows a preview and, if there’s a Player (or Name) column, how often each player appears. If your columns look wrong, send me a few rows.</p>
+    <div id="dkout" hidden></div>
+  </section>
+
+  <section class="panel" id="saved" hidden>
+    <h2>My saved leagues</h2>
+    <ul id="savedList"></ul>
+  </section>
+
+  <section id="result" hidden>
+    <div class="panel">
+      <h2 id="lname"></h2>
+      <div class="meta" id="lmeta"></div>
+      <div class="row">
+        <button id="save" class="ghost" type="button">Save to my account</button>
+        <button id="jsonBtn" class="ghost" type="button">Copy as JSON</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Standings</h2>
+      <p class="meta" style="margin-top:0">Tap a team to see its roster. Tap a column to sort.</p>
+      <div class="scroll"><table id="tbl"></table></div>
+    </div>
+  </section>
+</div>
+</main>
+
+<script>
+// Your Supabase project URL and publishable key. The publishable key is meant to be public.
+// Never put a secret or service_role key here.
+window.APP_CONFIG = {
+  SUPABASE_URL: "https://fghympizmejrgugmcqnw.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_s3RIyvNRoYouummnblDFKA_DrE4dr_C"
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SL = "https://api.sleeper.app/v1", $ = id => document.getElementById(id), cfg = window.APP_CONFIG || {};
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let sb = null, session = null, players = null, cur = null, saved = [];
+const note = (t, bad) => { const n = $("note"); n.textContent = t || ""; n.className = bad ? "err" : "meta"; n.hidden = !t; };
+const sget = async p => { const r = await fetch(SL + p); if (!r.ok) throw new Error("Sleeper returned " + r.status); return r.json(); };
+const head = a => "<tr>" + a.map(x => `<th tabindex="0" title="Click to sort">${esc(x)}</th>`).join("") + "</tr>";
+const now = new Date(), yr = now.getMonth() < 2 ? now.getFullYear() - 1 : now.getFullYear();
+$("season").value = yr; $("eseason").value = yr;
+
+// ---------- sign-in gate ----------
+async function boot() {
+  if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY || !window.supabase) { location.replace("login.html"); return; }
+  sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  const { data } = await sb.auth.getSession();
+  if (!data.session) { location.replace("login.html?next=import.html"); return; }
+  session = data.session;
+  sb.auth.onAuthStateChange((e, s) => { if (!s) location.replace("login.html"); else session = s; });
+  $("who").textContent = session.user.email || "";
+  $("gate").hidden = true; $("page").hidden = false;
+  loadSaved();
+}
+$("signout").onclick = async () => { if (sb) await sb.auth.signOut(); location.replace("login.html"); };
+
+// ---------- tabs ----------
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-selected", x === b); });
+  ["sleeper", "espn", "dk"].forEach(k => $("t-" + k).hidden = k !== b.dataset.tab);
+  note("");
+});
+function openTab(k) { document.querySelector(`.tab[data-tab="${k}"]`).click(); }
+
+// ---------- Sleeper ----------
+async function findLeagues() {
+  note(""); $("leagues").innerHTML = "";
+  const name = $("user").value.trim();
+  if (!name) return note("Enter your Sleeper username.", true);
+  try {
+    const u = await sget("/user/" + encodeURIComponent(name));
+    if (!u || !u.user_id) return note("No Sleeper user named “" + name + "”. Check the spelling.", true);
+    const list = await sget(`/user/${u.user_id}/leagues/nfl/${encodeURIComponent($("season").value.trim())}`);
+    if (!list.length) return note("No NFL leagues found for " + name + " in " + $("season").value + ". Try another season.", true);
+    $("leagues").innerHTML = list.map(l => `<button class="pick" type="button" data-id="${esc(l.league_id)}">${esc(l.name)} <span class="meta">· ${l.total_rosters} teams</span></button>`).join("");
+  } catch (e) { note("Couldn’t reach Sleeper: " + e.message, true); }
+}
+async function sleeperLeague(id) {
+  const [lg, users, rosters] = await Promise.all([sget("/league/" + id), sget(`/league/${id}/users`), sget(`/league/${id}/rosters`)]);
+  if (!lg || !lg.league_id) throw new Error("League not found. Double-check the ID.");
+  if (!players) players = await sget("/players/nfl");
+  const byId = Object.fromEntries(users.map(u => [u.user_id, u]));
+  const pl = ids => (ids || []).map(i => { const p = players[i] || {}; return { n: p.full_name || ((p.first_name || "") + " " + (p.last_name || "")).trim() || i, pos: p.position || "", tm: p.team || "" }; });
+  const sc = lg.scoring_settings || {}, ppr = sc.rec === 1 ? "PPR" : sc.rec === 0.5 ? "Half PPR" : "Standard";
+  const teams = rosters.map(r => {
+    const s = r.settings || {}, u = byId[r.owner_id] || {}, st = r.starters || [], ir = r.reserve || [];
+    return { name: (u.metadata && u.metadata.team_name) || u.display_name || "Team " + r.roster_id, owner: u.display_name || "No owner",
+      w: s.wins || 0, l: s.losses || 0, t: s.ties || 0, pf: (s.fpts || 0) + (s.fpts_decimal || 0) / 100, pa: (s.fpts_against || 0) + (s.fpts_against_decimal || 0) / 100,
+      groups: [{ title: "Starters", list: pl(st) }, { title: "Bench", list: pl((r.players || []).filter(p => !st.includes(p) && !ir.includes(p))) }, { title: "Injured reserve", list: pl(ir) }] };
+  });
+  return { platform: "sleeper", id: String(id), season: String(lg.season), name: lg.name, meta: `${lg.season} · ${lg.total_rosters} teams · ${ppr} · ${String(lg.status || "").replace("_", " ")}`, teams };
+}
+async function importSleeper(id) {
+  note("");
+  if (!/^\d+$/.test(id)) return note("League IDs are numbers only.", true);
+  note("Importing from Sleeper…");
+  try { show(await sleeperLeague(id)); note(""); }
+  catch (e) { note("Couldn’t import that league: " + e.message, true); }
+}
+$("findBtn").onclick = findLeagues;
+$("loadBtn").onclick = () => importSleeper($("lid").value.trim());
+$("user").onkeydown = e => e.key === "Enter" && findLeagues();
+$("lid").onkeydown = e => e.key === "Enter" && importSleeper($("lid").value.trim());
+$("leagues").onclick = e => { const b = e.target.closest("button"); if (b) importSleeper(b.dataset.id); };
+
+// ---------- ESPN ----------
+$("espnForm").onsubmit = async e => {
+  e.preventDefault(); note("");
+  const id = $("eid").value.trim(), season = $("eseason").value.trim();
+  if (!/^\d{3,12}$/.test(id)) return note("Enter the numeric ESPN league ID.", true);
+  if (!/^20\d\d$/.test(season)) return note("Enter a four-digit season.", true);
+  $("ebtn").disabled = true; note("Importing from ESPN…");
+  try {
+    const r = await fetch("/.netlify/functions/espn", { method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+      body: JSON.stringify({ leagueId: id, season, s2: $("es2").value.trim(), swid: $("eswid").value.trim() }) });
+    let d = {}; try { d = await r.json(); } catch {}
+    if (!r.ok) throw new Error(d.error || "ESPN import failed (" + r.status + ").");
+    $("es2").value = ""; $("eswid").value = "";
+    show({ platform: "espn", id, season, name: d.name || "ESPN league " + id, meta: `${season} · ${d.teams.length} teams · ESPN`, teams: d.teams });
+    note("");
+  } catch (err) {
+    note(err.message === "Failed to fetch" ? "Couldn’t reach the ESPN import function. It only works on your live Netlify site, not in a preview or a local file." : err.message, true);
+  } finally { $("ebtn").disabled = false; }
+};
+
+// ---------- DraftKings best ball (CSV) ----------
+function parseCSV(t) {
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && t[i + 1] === "\n") i++; row.push(cell); cell = ""; rows.push(row); row = []; }
+    else cell += c;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim() !== ""));
+}
+$("dkfile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  note("");
+  if (f.size > 10 * 1024 * 1024) return note("That file is over 10 MB. Export a smaller date range.", true);
+  try {
+    const rows = parseCSV((await f.text()).replace(/^﻿/, ""));
+    if (rows.length < 2) return note("That file has no data rows.", true);
+    renderDk(rows);
+  } catch (err) { note("Couldn’t read that file: " + err.message, true); }
+};
+function renderDk(rows) {
+  const hdr = rows[0].map(h => h.trim()), data = rows.slice(1), low = hdr.map(h => h.toLowerCase());
+  const pi = low.findIndex(h => /^(player|player name|name)$/.test(h)),
+    ei = low.findIndex(h => /^(entry|entry id|entry key|draft|draft id|draft entry|contest|contest id)$/.test(h));
+  let exp = "";
+  if (pi >= 0) {
+    const m = new Map(), all = new Set();
+    data.forEach((r, i) => {
+      const p = (r[pi] || "").trim(); if (!p) return;
+      const k = ei >= 0 ? ((r[ei] || "").trim() || "row" + i) : "row" + i;
+      all.add(k); if (!m.has(p)) m.set(p, new Set()); m.get(p).add(k);
+    });
+    const list = [...m].map(([p, s]) => [p, s.size]).sort((a, b) => b[1] - a[1]).slice(0, 200);
+    const cols = ei >= 0 ? ["Player", "Drafts", "Exposure"] : ["Player", "Rows"];
+    exp = `<h3>Player exposure</h3><div class="scroll"><table>${head(cols)}${list.map(([p, n]) => `<tr><td>${esc(p)}</td><td>${n}</td>${ei >= 0 ? `<td>${(n / all.size * 100).toFixed(1)}%</td>` : ""}</tr>`).join("")}</table></div>` +
+      (ei >= 0 ? `<p class="meta">Exposure is the share of the ${all.size} distinct “${esc(hdr[ei])}” values that include the player.</p>` : `<p class="meta">No entry or draft column found, so this counts rows per player.</p>`);
+  } else {
+    exp = `<p class="meta">No Player or Name column found, so there’s no exposure table. Here’s a preview of your file.</p>`;
+  }
+  const prev = data.slice(0, 25);
+  $("dkout").innerHTML = `<h2>${data.length} rows · ${hdr.length} columns</h2>` + exp +
+    `<h3>Preview (first ${prev.length} rows)</h3><div class="scroll"><table>${head(hdr)}${prev.map(r => "<tr>" + hdr.map((_, i) => `<td>${esc(r[i] || "")}</td>`).join("") + "</tr>").join("")}</table></div>`;
+  $("dkout").hidden = false;
+}
+
+// ---------- show a league ----------
+function show(lg) {
+  cur = lg;
+  $("lname").textContent = lg.name; $("lmeta").textContent = lg.meta;
+  const rows = lg.teams.slice().sort((a, b) => b.w - a.w || b.pf - a.pf);
+  const grp = t => t.groups.filter(g => g.list.length).map(g => `<h3>${esc(g.title)}</h3><ul>${g.list.map(p => `<li><span class="pos">${esc(p.pos)}</span>${esc(p.n)} <span class="meta">${esc(p.tm || "")}</span></li>`).join("")}</ul>`).join("");
+  $("tbl").innerHTML = head(["Team", "W-L", "PF", "PA"]) + rows.map(t =>
+    `<tr class="team" tabindex="0"><td>${esc(t.name)}<div class="meta">${esc(t.owner)}</div></td><td>${t.w}-${t.l}${t.t ? "-" + t.t : ""}</td><td>${(+t.pf).toFixed(1)}</td><td>${(+t.pa).toFixed(1)}</td></tr>` +
+    `<tr class="roster" hidden><td colspan="4">${grp(t)}</td></tr>`).join("");
+  $("result").hidden = false;
+  $("result").scrollIntoView({ behavior: "smooth" });
+}
+const toggle = tr => { const n = tr.nextElementSibling; if (n) n.hidden = !n.hidden; };
+$("tbl").onclick = e => { const tr = e.target.closest("tr.team"); if (tr && !e.target.closest("th")) toggle(tr); };
+$("tbl").onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("tr.team")) { e.preventDefault(); toggle(e.target); } };
+$("jsonBtn").onclick = async () => {
+  try { await navigator.clipboard.writeText(JSON.stringify(cur, null, 2)); $("jsonBtn").textContent = "Copied"; }
+  catch { $("jsonBtn").textContent = "Copy blocked by browser"; }
+  setTimeout(() => $("jsonBtn").textContent = "Copy as JSON", 2000);
+};
+
+// ---------- sortable tables ----------
+function sortTbl(th) {
+  const table = th.closest("table"), i = [...th.parentNode.children].indexOf(th),
+    teams = [...table.querySelectorAll("tr.team")],
+    units = teams.length ? teams.map(t => [t, t.nextElementSibling]) : [...table.querySelectorAll("tr")].filter(r => !r.querySelector("th")).map(r => [r]);
+  if (!units.length) return;
+  const key = u => {
+    const c = u[0].children[i], t = (c.firstChild && c.firstChild.nodeType === 3 ? c.firstChild.textContent : c.textContent).trim(),
+      m = t.match(/^([+-]?\d[\d,]*\.?\d*)(\s+of\s+\d+|%|-\d+(-\d+)?)?$/);
+    return m ? parseFloat(m[1].replace(/,/g, "")) : t.toLowerCase();
+  };
+  const num = typeof key(units[0]) === "number", cur2 = th.getAttribute("aria-sort"),
+    dir = cur2 ? (cur2 === "ascending" ? "descending" : "ascending") : (num ? "descending" : "ascending");
+  [...th.parentNode.children].forEach(c => c.removeAttribute("aria-sort"));
+  th.setAttribute("aria-sort", dir);
+  const cmp = (a, b) => typeof a === "number" && typeof b === "number" ? a - b : typeof a === "number" ? -1 : typeof b === "number" ? 1 : String(a).localeCompare(String(b));
+  units.sort((x, y) => (dir === "ascending" ? 1 : -1) * cmp(key(x), key(y)));
+  const parent = units[0][0].parentNode;
+  units.forEach(u => u.forEach(r => parent.appendChild(r)));
+}
+document.addEventListener("click", e => { const th = e.target.closest("th[tabindex]"); if (th) sortTbl(th); });
+document.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { const th = e.target.closest && e.target.closest("th[tabindex]"); if (th) { e.preventDefault(); sortTbl(th); } } });
+
+// ---------- saved leagues ----------
+async function loadSaved() {
+  const { data, error } = await sb.from("saved_leagues").select("id,platform,league_id,season,name").order("created_at", { ascending: false });
+  if (error || !data || !data.length) { $("saved").hidden = true; saved = []; return; }
+  saved = data; $("saved").hidden = false;
+  $("savedList").innerHTML = data.map(x => `<li><span>${esc(x.name || x.league_id)} <span class="meta">· ${esc(x.platform)} ${esc(x.season || "")}</span></span><span><button class="ghost" type="button" data-open="${esc(x.id)}">Open</button> <button class="ghost" type="button" data-del="${esc(x.id)}">Remove</button></span></li>`).join("");
+}
+$("savedList").onclick = async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.del) { await sb.from("saved_leagues").delete().eq("id", b.dataset.del); return loadSaved(); }
+  const x = saved.find(s => s.id === b.dataset.open); if (!x) return;
+  if (x.platform === "sleeper") importSleeper(x.league_id);
+  else { openTab("espn"); $("eid").value = x.league_id; $("eseason").value = x.season || yr; note("Tap Import from ESPN. If this league is private, enter your cookies again first."); }
+};
+$("save").onclick = async () => {
+  if (!cur) return;
+  const { error } = await sb.from("saved_leagues").upsert(
+    { user_id: session.user.id, platform: cur.platform, league_id: cur.id, season: cur.season, name: cur.name },
+    { onConflict: "user_id,platform,league_id,season" });
+  note(error ? "Couldn’t save: " + error.message + " (did you run supabase-setup.sql?)" : "Saved to your account.", !!error);
+  if (!error) loadSaved();
+};
+
+boot();
+</script>
+</body>
+</html>

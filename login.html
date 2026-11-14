@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5a6b7a;--a:#1f6b4a;--flag:#e8b923;--line:#c9d2da;--err:#b3261e;--ok:#1f6b4a;--on:#fff}
+@media (prefers-color-scheme:dark){:root{--paper:#0f1a22;--card:#16252f;--ink:#e8eef3;--mute:#93a4b2;--a:#4cc08a;--line:#2a3d4a;--err:#ff8a80;--ok:#4cc08a;--on:#08130e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Source Sans 3",system-ui,sans-serif}
+main{max-width:440px;margin:0 auto;padding:40px 16px 64px}
+h1{font:700 44px/1 "Barlow Condensed",Impact,sans-serif;border-left:8px solid var(--flag);padding-left:12px;margin:0 0 20px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tabs button{flex:1;font:inherit;font-weight:600;padding:9px;border-radius:4px;background:var(--paper);color:var(--ink);border:1px solid var(--line);cursor:pointer}
+.tabs button.on{background:var(--a);color:var(--on);border-color:var(--a)}
+label{display:block;font-weight:600;margin:12px 0 4px}
+input{width:100%;padding:11px 12px;font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:4px}
+input:focus-visible,button:focus-visible{outline:3px solid var(--flag);outline-offset:1px}
+.go{width:100%;margin-top:16px;font:inherit;font-weight:600;padding:12px;border:0;border-radius:4px;background:var(--a);color:var(--on);cursor:pointer}
+.go:disabled{opacity:.6;cursor:default}
+.link{background:none;border:0;color:var(--a);font:inherit;text-decoration:underline;cursor:pointer;padding:8px 0 0}
+.err{color:var(--err)}.ok{color:var(--ok)}
+.meta{color:var(--mute)}
+[hidden]{display:none!important}
+code{background:var(--paper);padding:1px 5px;border-radius:3px}
+</style>
+</head>
+<body>
+<main>
+<h1>Sign in</h1>
+
+<div class="panel" id="setup" hidden>
+  <b id="setupTitle"></b>
+  <p class="meta" id="setupText"></p>
+</div>
+
+<div class="panel" id="box">
+  <div class="tabs" id="tabs">
+    <button type="button" data-m="in" class="on">Sign in</button>
+    <button type="button" data-m="up">Create account</button>
+  </div>
+  <form id="form" novalidate>
+    <div id="emailRow">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" inputmode="email" autocapitalize="none">
+    </div>
+    <div id="pwRow">
+      <label for="pw" id="pwLabel">Password</label>
+      <input id="pw" type="password" autocomplete="current-password">
+    </div>
+    <button class="go" id="go" type="submit">Sign in</button>
+    <p id="msg" role="status" hidden></p>
+  </form>
+  <button class="link" id="forgot" type="button">Forgot your password?</button>
+</div>
+</main>
+
+<script>
+// Your Supabase project URL and publishable key. The publishable key is meant to be public.
+// Never put a secret or service_role key here.
+window.APP_CONFIG = {
+  SUPABASE_URL: "https://fghympizmejrgugmcqnw.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_s3RIyvNRoYouummnblDFKA_DrE4dr_C"
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const $ = id => document.getElementById(id), cfg = window.APP_CONFIG || {};
+let mode = "in", sb = null;
+const recovery = /type=recovery/.test(location.hash + location.search);
+
+function msg(t, bad) { const m = $("msg"); m.textContent = t || ""; m.className = bad ? "err" : "ok"; m.hidden = !t; }
+function go() {
+  const n = new URLSearchParams(location.search).get("next");
+  location.replace(/^[a-z-]+\.html$/.test(n || "") ? n : "import.html");
+}
+function setMode(m) {
+  mode = m; msg("");
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.m === m));
+  $("emailRow").hidden = m === "reset";
+  $("tabs").hidden = m === "reset";
+  $("forgot").hidden = m !== "in";
+  $("pwLabel").textContent = m === "reset" ? "New password" : m === "up" ? "Choose a password (8+ characters)" : "Password";
+  $("pw").autocomplete = m === "in" ? "current-password" : "new-password";
+  $("go").textContent = m === "in" ? "Sign in" : m === "up" ? "Create account" : "Set new password";
+}
+
+function problem(title, text) {
+  $("setupTitle").textContent = title; $("setupText").textContent = text;
+  $("setup").hidden = false; $("box").hidden = true;
+}
+function start() {
+  sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  sb.auth.onAuthStateChange(e => { if (e === "PASSWORD_RECOVERY") setMode("reset"); });
+  if (recovery) setMode("reset");
+  else sb.auth.getSession().then(({ data }) => { if (data.session) go(); });
+
+  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => setMode(b.dataset.m));
+
+  $("form").onsubmit = async e => {
+    e.preventDefault(); msg("");
+    const email = $("email").value.trim(), pw = $("pw").value;
+    if (mode !== "reset" && !/^\S+@\S+\.\S+$/.test(email)) return msg("Enter a valid email address.", true);
+    if (!pw) return msg("Enter a password.", true);
+    if (mode !== "in" && pw.length < 8) return msg("Use at least 8 characters.", true);
+    $("go").disabled = true;
+    try {
+      if (mode === "in") {
+        const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+        if (error) return msg(error.message, true);
+        go();
+      } else if (mode === "up") {
+        const { data, error } = await sb.auth.signUp({ email, password: pw, options: { emailRedirectTo: location.href.split(/[?#]/)[0] } });
+        if (error) return msg(error.message, true);
+        if (data.session) go();
+        else msg("Check your email for a confirmation link, then come back and sign in.");
+      } else {
+        const { error } = await sb.auth.updateUser({ password: pw });
+        if (error) return msg(error.message, true);
+        msg("Password updated.");
+        setTimeout(go, 800);
+      }
+    } catch (err) { msg("Something went wrong: " + err.message, true); }
+    finally { $("go").disabled = false; }
+  };
+
+  $("forgot").onclick = async () => {
+    const email = $("email").value.trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) return msg("Type your email above first, then tap this again.", true);
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.href.split(/[?#]/)[0] });
+    msg(error ? error.message : "If that email has an account, a reset link is on its way.", !!error);
+  };
+}
+if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
+  problem("Sign-in isn’t set up yet.", "The Supabase project URL or key is missing from this page. Make sure you uploaded the newest login.html.");
+} else if (window.supabase) {
+  start();
+} else {
+  const s = document.createElement("script");
+  s.src = "https://unpkg.com/@supabase/supabase-js@2";
+  s.onload = start;
+  s.onerror = () => problem("Couldn’t load the sign-in library.", "Your browser or network blocked it. Turn off any content blocker for this site, check your connection, and reload.");
+  document.head.appendChild(s);
+}
+</script>
+</body>
+</html>

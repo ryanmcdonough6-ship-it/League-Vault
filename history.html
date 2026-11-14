@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>League History</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5a6b7a;--a:#1f6b4a;--b:#b5471f;--flag:#e8b923;--line:#c9d2da;--err:#b3261e;--on:#fff}
+@media (prefers-color-scheme:dark){:root{--paper:#0f1a22;--card:#16252f;--ink:#e8eef3;--mute:#93a4b2;--a:#4cc08a;--b:#ff9566;--line:#2a3d4a;--err:#ff8a80;--on:#08130e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Source Sans 3",system-ui,sans-serif}
+main{max-width:800px;margin:0 auto;padding:28px 16px 64px}
+h1,h2,h3{font-family:"Barlow Condensed",Impact,sans-serif;margin:0}
+h1{font-size:44px;line-height:1;border-left:8px solid var(--flag);padding-left:12px}
+h2{font-size:28px;margin-bottom:4px}h3{font-size:22px;margin:14px 0 4px}
+.meta{color:var(--mute)}
+nav{display:flex;gap:6px;overflow-x:auto;margin:14px 0 0;padding-bottom:4px}
+nav.sub{margin-top:8px}
+nav button{flex:none;font:inherit;font-weight:600;padding:9px 14px;border-radius:4px;background:var(--card);color:var(--ink);border:1px solid var(--line);cursor:pointer}
+nav button.on{background:var(--a);color:var(--on);border-color:var(--a)}
+button:focus-visible{outline:3px solid var(--flag);outline-offset:1px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px;margin-top:12px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.div{border:1px solid var(--line);border-top-width:5px;border-radius:6px;padding:10px 14px}
+.div.a{border-top-color:var(--a)}.div.b{border-top-color:var(--b)}
+ul{list-style:none;margin:6px 0 0;padding:0}
+li{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--line)}
+li:last-child{border:0}
+.err{color:var(--err)}
+p{margin:8px 0}
+th[tabindex]{cursor:pointer;user-select:none}
+th[tabindex]:focus-visible{outline:3px solid var(--flag);outline-offset:-3px}
+th[aria-sort=ascending]::after{content:" \25B2"}
+th[aria-sort=descending]::after{content:" \25BC"}
+</style>
+</head>
+<body>
+<main>
+<h1>League History</h1>
+<p class="meta"><a href="index.html" style="color:var(--a)">Dashboard</a> · <a href="tournament.html" style="color:var(--a)">Divisions</a> · <a href="import.html" style="color:var(--a)">League import</a></p>
+<div id="app"><div class="panel">Loading league history…</div></div>
+</main>
+<script>
+const API="https://api.sleeper.app/v1",$=i=>document.getElementById(i),
+esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),
+get=async p=>{const r=await fetch(API+p);if(!r.ok)throw new Error("Sleeper "+r.status);return r.json()},
+cap=p=>get(p).catch(()=>null),f=n=>(+n||0).toFixed(1),
+S=r=>r.settings||{},pf=r=>(S(r).fpts||0)+(S(r).fpts_decimal||0)/100,wins=r=>S(r).wins||0,
+pct=c=>(c.w+c.t/2)/((c.w+c.t+c.l)||1);
+const LEAGUE="1313951840064278528",DIV={a:"Hail Marys",b:"Pick Sixes"},TW=[5,6,7],G=["A+","A","A-","B+","B","B-","C+","C","D","F"];
+let chain=[],name={},ids=[],players={},divAt={},st={y:"all",s:"draft"},rt=0;
+const nm=r=>esc(name[r]||"Team "+r);
+const pn=id=>{const p=players[id];return esc(p?(p.full_name||id):id)+(p&&p.position?` <span class="meta">${esc(p.position)}</span>`:"")};
+const tbl=(h,rows)=>`<div class="scroll"><table><tr>${h.map(x=>`<th tabindex="0" title="Click to sort">${x}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</table></div>`;
+const side=(r,p,w)=>`<li><span>${w==r?"<b>":""}${r?nm(r):"TBD"}${w==r?"</b>":""}</span><span>${p==null?"":f(p)}</span></li>`;
+
+async function init(){
+  try{
+    let cur=LEAGUE;
+    while(cur&&cur!=="0"&&chain.length<25){const l=await get("/league/"+cur);if(!l||!l.league_id)break;chain.unshift(l);cur=l.previous_league_id}
+    if(!chain.length)throw new Error("League not found");
+    const [users,ds,pl,...rs]=await Promise.all([get(`/league/${chain[chain.length-1].league_id}/users`),cap(`/league/${chain[0].league_id}/drafts`),cap("/players/nfl"),...chain.map(l=>get(`/league/${l.league_id}/rosters`))]);
+    players=pl||{};chain.forEach((l,i)=>l.rosters=rs[i]);
+    const u=Object.fromEntries(users.map(x=>[x.user_id,x]));
+    rs[rs.length-1].forEach(r=>{const x=u[r.owner_id]||{};name[r.roster_id]=(x.metadata&&x.metadata.team_name)||x.display_name||"Team "+r.roster_id});
+    ids=Object.keys(name).map(Number);
+    const d=ds&&ds[0],slot={};
+    if(d&&d.slot_to_roster_id)Object.entries(d.slot_to_roster_id).forEach(([s,r])=>slot[r]=+s);
+    else if(d&&d.draft_order)rs[0].forEach(r=>{if(d.draft_order[r.owner_id])slot[r.roster_id]=d.draft_order[r.owner_id]});
+    ids.forEach(r=>{if(!slot[r])slot[r]=r});
+    const cum={};ids.forEach(r=>cum[r]={w:0,l:0,t:0,pf:0});
+    chain.forEach((l,i)=>{
+      const m={};
+      if(!i)ids.forEach(r=>m[r]=slot[r]%2?"a":"b");
+      else ids.slice().sort((x,y)=>pct(cum[y])-pct(cum[x])||cum[y].pf-cum[x].pf).forEach((r,k)=>m[r]=(k%4==0||k%4==3)?"a":"b");
+      divAt[l.season]=m;
+      l.rosters.forEach(r=>{const c=cum[r.roster_id];if(!c)return;c.w+=wins(r);c.l+=S(r).losses||0;c.t+=S(r).ties||0;c.pf+=pf(r)});
+    });
+    render();
+  }catch(e){$("app").innerHTML=`<div class="panel err">Couldn’t load the league: ${esc(e.message)}</div>`}
+}
+
+async function loadYear(l){
+  if(l.D)return l.D;
+  const id=l.league_id,rs=((l.settings&&l.settings.playoff_week_start)||15)-1,wk=Array.from({length:rs},(_,i)=>i+1);
+  const [mw,tx,dr,wb]=await Promise.all([
+    Promise.all(wk.map(w=>cap(`/league/${id}/matchups/${w}`))),
+    Promise.all(wk.map(w=>cap(`/league/${id}/transactions/${w}`))),
+    cap(`/league/${id}/drafts`).then(async ds=>{const list=(ds||[]).filter(x=>x.status=="complete").sort((x,y)=>(x.start_time||0)-(y.start_time||0));const all=await Promise.all(list.map(d=>cap(`/draft/${d.draft_id}/picks`)));return all.flatMap(a=>a||[])}),
+    cap(`/league/${id}/winners_bracket`)]);
+  const W=mw.map(a=>{const o={};(a||[]).forEach(m=>o[m.roster_id]={pts:m.points||0,pp:m.players_points||{},mid:m.matchup_id});return o});
+  const dv=divAt[l.season],P={},pd={a:{},b:{}},pr={};let hi={pts:0};
+  W.forEach((o,wi)=>Object.entries(o).forEach(([r,x])=>{
+    if(x.pts>hi.pts)hi={pts:x.pts,r:+r,w:wi+1};
+    const d=dv[r]||"a";
+    Object.entries(x.pp).forEach(([p,v])=>{P[p]=(P[p]||0)+v;pd[d][p]=(pd[d][p]||0)+v;pr[p+"|"+r]=(pr[p+"|"+r]||0)+v});
+  }));
+  // standings before the tournament starts
+  const std=u=>{const s={};ids.forEach(r=>s[r]={w:0,pf:0});
+    for(let w=0;w<u;w++){const g={};Object.entries(W[w]||{}).forEach(([r,x])=>{s[r].pf+=x.pts;if(x.mid!=null)(g[x.mid]||=[]).push([+r,x.pts])});
+      Object.values(g).forEach(p=>{if(p.length==2&&(p[0][1]||p[1][1])){const [x]=p[0][1]>=p[1][1]?p:[p[1],p[0]];s[x[0]].w++}})}
+    return s};
+  const s0=std(TW[0]-1),seed=k=>ids.filter(r=>dv[r]==k).sort((x,y)=>s0[y].w-s0[x].w||s0[y].pf-s0[x].pf).slice(0,4);
+  const a=seed("a"),b=seed("b"),sc=(w,r)=>W[w-1]&&W[w-1][r]?W[w-1][r].pts:null;
+  const play=(w,x,y)=>{if(x==null||y==null)return{x,y,win:null};const px=sc(w,x),py=sc(w,y);return{x,y,px,py,win:(!px&&!py)?null:(px>=py?x:y)}};
+  let tour=null;
+  if(a.length>=4&&b.length>=4){
+    const r1=[play(TW[0],a[0],b[3]),play(TW[0],b[0],a[3]),play(TW[0],a[1],b[2]),play(TW[0],b[1],a[2])];
+    const sf=[play(TW[1],r1[0].win,r1[2].win),play(TW[1],r1[1].win,r1[3].win)];
+    tour={r1,sf,f:play(TW[2],sf[0].win,sf[1].win)};
+  }
+  // draft grades: points above what picks at nearby spots scored
+  const pk=dr.filter(p=>p.player_id).map(p=>({...p,pts:P[p.player_id]||0}));
+  pk.forEach(p=>{const nb=pk.filter(q=>q.draft_id==p.draft_id&&Math.abs(q.pick_no-p.pick_no)<=6);p.d=p.pts-nb.reduce((s,q)=>s+q.pts,0)/nb.length});
+  const LIM={QB:10,RB:25,WR:25,TE:10},pos=id=>(players[id]||{}).position,rk={};
+  Object.keys(LIM).forEach(q=>Object.keys(P).filter(p=>pos(p)==q).sort((x,y)=>P[y]-P[x]).forEach((p,i)=>rk[p]=i+1));
+  const T={};pk.forEach(p=>{const t=T[p.roster_id]||={d:0,h:0,n:0};t.d+=p.d;t.n++;if(rk[p.player_id]&&rk[p.player_id]<=LIM[pos(p.player_id)])t.h++});
+  const grades=Object.entries(T).sort((x,y)=>y[1].d-x[1].d).map(([r,t],i,ar)=>({r:+r,d:t.d,h:t.h,n:t.n,g:G[Math.floor(i/ar.length*G.length)]}));
+  // trades: points the acquired players scored for the new team after the deal
+  const trades=tx.flatMap((ar,wi)=>(ar||[]).filter(t=>t.type=="trade"&&t.status=="complete").map(t=>({t,leg:wi+1}))).map(({t,leg})=>({leg,sides:t.roster_ids.map(r=>{
+    const got=Object.keys(t.adds||{}).filter(p=>t.adds[p]==r);let pts=0;
+    got.forEach(p=>{for(let w=leg;w<=rs;w++){const x=W[w-1]&&W[w-1][r];if(x&&x.pp[p])pts+=x.pp[p]}});
+    return{r,got,pts,pk:(t.draft_picks||[]).filter(k=>k.owner_id==r)}})}));
+  // awards
+  const top=d=>{const e=Object.entries(pd[d]).sort((x,y)=>y[1]-x[1])[0];if(!e)return null;
+    const r=ids.filter(x=>dv[x]==d).sort((x,y)=>(pr[e[0]+"|"+y]||0)-(pr[e[0]+"|"+x]||0))[0];return{p:e[0],v:e[1],r}};
+  const rec=r=>l.rosters.find(x=>x.roster_id==r)||{},
+    toy=d=>ids.filter(r=>dv[r]==d).sort((x,y)=>wins(rec(y))-wins(rec(x))||pf(rec(y))-pf(rec(x)))[0];
+  const byPf=l.rosters.slice().sort((x,y)=>pf(y)-pf(x)),byW=l.rosters.slice().sort((x,y)=>wins(y)-wins(x)||pf(y)-pf(x));
+  const luck=l.rosters.map(r=>({r:r.roster_id,v:byW.indexOf(r)-byPf.indexOf(r)})).sort((x,y)=>y.v-x.v)[0];
+  const fin=(wb||[]).find(m=>m.p===1);
+  return l.D={rs,tour,pk,grades,rk,trades,wb:wb||[],champ:fin&&fin.w,
+    aw:{mvp:{a:top("a"),b:top("b")},toy:{a:toy("a"),b:toy("b")},hi,luck,
+      steal:pk.filter(p=>p.round>=4).sort((x,y)=>y.d-x.d)[0],bust:pk.filter(p=>p.round<=3).sort((x,y)=>x.d-y.d)[0]}};
+}
+
+const views={
+  draft:D=>!D.grades.length?"<p>No completed draft found for this season.</p>":
+    `<h2>Draft grades</h2><p class="meta">Each team’s picks are scored by season points above what players taken at nearby spots scored. Kickers and defenses are not adjusted. A hit is a pick who finished any season, the draft year or later, as a top 10 QB, top 25 RB, top 25 WR, or top 10 TE in points.</p>`+
+    tbl(["Grade","Team","Points over expected","Hits"],D.grades.map(g=>[`<b>${g.g}</b>`,nm(g.r),(g.d>0?"+":"")+f(g.d),`${g.h} of ${g.n}`])),
+  trade:D=>!D.trades.length?"<p>No trades this season.</p>":
+    `<h2>Trade analyst</h2><p class="meta">The winner is the side whose acquired players scored more for them after the trade. Draft picks are listed but not valued.</p>`+
+    D.trades.map(t=>{const best=Math.max(...t.sides.map(s=>s.pts));
+      return`<div class="div a" style="margin-top:10px"><b>Week ${t.leg}</b><ul>`+t.sides.map(s=>`<li><span>${s.pts==best&&t.sides[0].pts!=t.sides[1].pts?"<b>":""}${nm(s.r)} got ${s.got.map(pn).concat(s.pk.map(k=>`${k.season} round ${k.round} pick`)).join(", ")||"nothing"}${s.pts==best?"</b>":""}</span><span>${f(s.pts)} pts</span></li>`).join("")+"</ul></div>"}).join(""),
+  tour:D=>{const t=D.tour;if(!t)return"<p>Each division needs at least 4 teams for the bracket.</p>";
+    const m=(x,w)=>`<div class="div a"><ul>${side(x.x,x.px,x.win)}${side(x.y,x.py,x.win)}</ul></div>`;
+    return`<h2>In Season Tournament</h2><p class="meta">Top 4 teams in each division at the start of week ${TW[0]}, seeded across divisions. Each round is decided by points scored that week.</p>`+
+      `<h3>Round 1 · Week ${TW[0]}</h3><div class="grid">${t.r1.map(m).join("")}</div><h3>Semifinals · Week ${TW[1]}</h3><div class="grid">${t.sf.map(m).join("")}</div><h3>Final · Week ${TW[2]}</h3><div class="grid">${m(t.f)}</div>`},
+  play:D=>{if(!D.wb.length)return"<p>No playoff bracket yet.</p>";
+    const who=v=>typeof v=="object"&&v?`Winner of game ${v.w}`:v?nm(v):"TBD",rounds=[...new Set(D.wb.map(m=>m.r))];
+    return`<h2>Playoff bracket</h2>`+rounds.map(r=>`<h3>Round ${r}</h3><div class="grid">${D.wb.filter(m=>m.r==r).map(m=>`<div class="div b"><ul><li><span>${m.w&&m.w==m.t1?"<b>":""}${who(m.t1)}${m.w&&m.w==m.t1?"</b>":""}</span></li><li><span>${m.w&&m.w==m.t2?"<b>":""}${who(m.t2)}${m.w&&m.w==m.t2?"</b>":""}</span></li></ul></div>`).join("")}</div>`).join("")+(D.champ?`<h3>Champion</h3><p><b>${nm(D.champ)}</b></p>`:"")},
+  award:D=>{const A=D.aw;
+    const dvc=d=>`<div class="div ${d}"><h3>${DIV[d]}</h3><ul><li><span>MVP</span><span>${A.mvp[d]?pn(A.mvp[d].p)+" · "+f(A.mvp[d].v)+" pts · "+nm(A.mvp[d].r):"—"}</span></li><li><span>Team of the year</span><span>${A.toy[d]?nm(A.toy[d]):"—"}</span></li></ul></div>`;
+    return`<h2>Season awards</h2><div class="grid">${dvc("a")}${dvc("b")}</div><h3>League-wide</h3><ul>`+
+      `<li><span>Biggest week</span><span>${A.hi.r?nm(A.hi.r)+", week "+A.hi.w+", "+f(A.hi.pts):"—"}</span></li>`+
+      `<li><span>Draft steal</span><span>${A.steal?pn(A.steal.player_id)+" · round "+A.steal.round+" · "+nm(A.steal.roster_id):"—"}</span></li>`+
+      `<li><span>Draft bust</span><span>${A.bust?pn(A.bust.player_id)+" · round "+A.bust.round+" · "+nm(A.bust.roster_id):"—"}</span></li>`+
+      `<li><span>Hard luck (scored more than the record shows)</span><span>${A.luck&&A.luck.v>0?nm(A.luck.r):"—"}</span></li></ul>`}
+};
+
+function overview(){
+  const T={};ids.forEach(r=>T[r]={w:0,l:0,t:0,pf:0,ti:0,to:0,mv:0,h:0,n:0});
+  chain.forEach(l=>{l.rosters.forEach(r=>{const c=T[r.roster_id];if(!c)return;c.w+=wins(r);c.l+=S(r).losses||0;c.t+=S(r).ties||0;c.pf+=pf(r)});
+    const D=l.D;if(D.champ&&T[D.champ])T[D.champ].ti++;
+    D.grades.forEach(g=>{if(T[g.r]){T[g.r].h+=g.h;T[g.r].n+=g.n}});
+    if(D.tour&&D.tour.f.win&&T[D.tour.f.win])T[D.tour.f.win].to++;
+    ["a","b"].forEach(d=>{const m=D.aw.mvp[d];if(m&&T[m.r])T[m.r].mv++})});
+  const rows=ids.slice().sort((x,y)=>T[y].ti-T[x].ti||pct(T[y])-pct(T[x]));
+  return`<h2>All-time overview</h2><p class="meta">${chain.length} season${chain.length>1?"s":""} combined.</p>`+
+    tbl(["Team","Record","Win %","Points","Titles","Tournament","MVPs","Draft hits"],rows.map(r=>{const c=T[r];return[nm(r),`${c.w}-${c.l}${c.t?"-"+c.t:""}`,(pct(c)*100).toFixed(1),f(c.pf),c.ti,c.to,c.mv,`${c.h} of ${c.n}`]}))
+}
+
+async function calcHits(l){
+  const LIM={QB:10,RB:25,WR:25,TE:10},later=chain.slice(chain.indexOf(l));
+  await Promise.all(later.map(loadYear));
+  const by={};
+  l.D.pk.forEach(p=>{const lim=LIM[(players[p.player_id]||{}).position];
+    if(lim&&later.some(x=>(x.D.rk[p.player_id]||99)<=lim))by[p.roster_id]=(by[p.roster_id]||0)+1});
+  l.D.grades.forEach(g=>g.h=by[g.r]||0);
+}
+async function render(){
+  const tk=++rt,yrs=chain.slice().reverse();
+  const nav=`<nav>${[["all","Overview"],...yrs.map(l=>[l.season,l.season])].map(([k,t])=>`<button data-y="${k}" class="${st.y==k?"on":""}">${t}</button>`).join("")}</nav>`;
+  const sub=st.y=="all"?"":`<nav class="sub">${[["draft","Draft grades"],["trade","Trade analyst"],["tour","Tournament"],["play","Playoffs"],["award","Awards"]].map(([k,t])=>`<button data-s="${k}" class="${st.s==k?"on":""}">${t}</button>`).join("")}</nav>`;
+  $("app").innerHTML=nav+sub+`<div id="body" class="panel">Loading…</div>`;
+  let body;
+  try{
+    if(st.y=="all"){for(const l of chain){if(tk!=rt)return;$("body").textContent="Loading "+l.season+"…";await loadYear(l)}for(const l of chain)await calcHits(l);body=overview()}
+    else{const l=chain.find(x=>x.season==st.y),D=await loadYear(l);if(st.s=="draft"){$("body").textContent="Checking later seasons for hits…";await calcHits(l)}body=views[st.s](D)}
+  }catch(e){body=`<p class="err">Couldn’t load this view: ${esc(e.message)}</p>`}
+  if(tk==rt)$("body").innerHTML=body;
+}
+$("app").onclick=e=>{const th=e.target.closest("th[tabindex]");if(th)return sortTable(th);const b=e.target.closest("button");if(!b)return;if(b.dataset.y)st.y=b.dataset.y;if(b.dataset.s)st.s=b.dataset.s;render()};
+function sortTable(th){
+  const table=th.closest("table"),i=[...th.parentNode.children].indexOf(th),
+    rows=[...table.querySelectorAll("tr")].filter(r=>!r.querySelector("th")),
+    key=r=>{const t=r.children[i].textContent.trim(),g=G.indexOf(t);if(g>=0)return -g;
+      const m=t.match(/^([+-]?\d[\d,]*\.?\d*)(\s+of\s+\d+|%|-\d+(-\d+)?)?$/);
+      return m?parseFloat(m[1].replace(/,/g,"")):t.toLowerCase()};
+  if(!rows.length)return;
+  const num=typeof key(rows[0])=="number",cur=th.getAttribute("aria-sort"),
+    dir=cur?(cur=="ascending"?"descending":"ascending"):(num?"descending":"ascending");
+  [...th.parentNode.children].forEach(c=>c.removeAttribute("aria-sort"));
+  th.setAttribute("aria-sort",dir);
+  const cmp=(a,b)=>typeof a=="number"&&typeof b=="number"?a-b:typeof a=="number"?-1:typeof b=="number"?1:String(a).localeCompare(String(b));
+  rows.sort((x,y)=>(dir=="ascending"?1:-1)*cmp(key(x),key(y)));
+  const parent=rows[0].parentNode;rows.forEach(r=>parent.appendChild(r));
+}
+$("app").onkeydown=e=>{const th=e.target.closest&&e.target.closest("th[tabindex]");if(th&&(e.key=="Enter"||e.key==" ")){e.preventDefault();sortTable(th)}};
+init();
+</script>
+</body>
+</html>
