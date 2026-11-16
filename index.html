@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>League Dashboard</title>
+<title>League Vault · Dashboard</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:image" content="logo.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{--paper:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5a6b7a;--a:#1f6b4a;--b:#b5471f;--flag:#e8b923;--line:#c9d2da;--err:#b3261e;--win:#1f6b4a;--loss:#b3261e}
@@ -43,10 +46,15 @@ li span:last-child{color:var(--mute);white-space:nowrap;font-variant-numeric:tab
 h3{font-size:19px;color:var(--mute);margin-top:10px}
 .err{color:var(--err)}
 p{margin:6px 0}
+.brand{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);margin-bottom:14px}
+.brand img{width:44px;height:44px;display:block}
+.brand span{font:700 28px/1 "Barlow Condensed",Impact,sans-serif;letter-spacing:.02em}
+.brand:focus-visible{outline:3px solid var(--flag);outline-offset:3px;border-radius:4px}
 </style>
 </head>
 <body>
 <main>
+<a class="brand" href="index.html" aria-label="League Vault home"><img src="shield.png" alt="" width="44" height="44"><span>League Vault</span></a>
 <div class="top">
   <h1>League Dashboard</h1>
 </div>

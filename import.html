@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Import a league</title>
+<title>League Vault · Import a league</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:image" content="logo.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{--paper:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5a6b7a;--turf:#1f6b4a;--flag:#e8b923;--line:#c9d2da;--err:#b3261e;--on:#fff}
@@ -55,10 +58,15 @@ li{padding:3px 0}
 details{margin-top:12px}
 summary{cursor:pointer;font-weight:600}
 [hidden]{display:none!important}
+.brand{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);margin-bottom:14px}
+.brand img{width:44px;height:44px;display:block}
+.brand span{font:700 28px/1 "Barlow Condensed",Impact,sans-serif;letter-spacing:.02em}
+.brand:focus-visible{outline:3px solid var(--flag);outline-offset:3px;border-radius:4px}
 </style>
 </head>
 <body>
 <main>
+<a class="brand" href="index.html" aria-label="League Vault home"><img src="shield.png" alt="" width="44" height="44"><span>League Vault</span></a>
 <div class="top">
   <h1>Import a league</h1>
   <div class="meta"><span id="who"></span> <button class="ghost" id="signout" type="button">Sign out</button></div>

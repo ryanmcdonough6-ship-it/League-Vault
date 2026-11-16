@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in</title>
+<title>League Vault · Sign in</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:image" content="logo.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{--paper:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5a6b7a;--a:#1f6b4a;--flag:#e8b923;--line:#c9d2da;--err:#b3261e;--ok:#1f6b4a;--on:#fff}
@@ -26,10 +29,17 @@ input:focus-visible,button:focus-visible{outline:3px solid var(--flag);outline-o
 .meta{color:var(--mute)}
 [hidden]{display:none!important}
 code{background:var(--paper);padding:1px 5px;border-radius:3px}
+.hero{display:flex;justify-content:center;margin-bottom:18px}
+.hero img{width:min(240px,70vw);height:auto;display:block;background:#fff;border-radius:12px;padding:8px}
+.brand{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);margin-bottom:14px}
+.brand img{width:44px;height:44px;display:block}
+.brand span{font:700 28px/1 "Barlow Condensed",Impact,sans-serif;letter-spacing:.02em}
+.brand:focus-visible{outline:3px solid var(--flag);outline-offset:3px;border-radius:4px}
 </style>
 </head>
 <body>
 <main>
+<div class="hero"><img src="logo.png" alt="League Vault" width="240" height="240"></div>
 <h1>Sign in</h1>
 
 <div class="panel" id="setup" hidden>
